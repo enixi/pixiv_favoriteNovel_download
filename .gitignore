@@ -1,0 +1,26 @@
+""   # Windows
+# 🛑 操作系统生成的文件
+.DS_Store
+Thumbs.db
+
+# 🛑 Python 相关
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 🛑 虚拟环境
+venv/
+env/
+.venv/
+
+# 🛑 日志文件
+logs/
+*.log
+
+# 🛑 忽略 Pixiv 小说下载的文件
+download_novels/
+
+# 🛑 忽略本地 WebDriver 可执行文件（如果有的话）
+msedgedriver.exe
+chromedriver.exe
