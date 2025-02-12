@@ -1,7 +1,7 @@
 # 📖 Pixiv Favorite Novel Download  
 
 这是一个用于 **批量下载 Pixiv 自己收藏夹里的小说** 的 Python 爬虫脚本。  
-⚠ **注意**：请 **确保开启【全局】 VPN**，并 **安装 Microsoft Edge 浏览器**（暂不支持 Chrome/Safari）。  
+⚠ **注意**：请 **确保开启【全局】 VPN**，并 **安装 Microsoft Edge/Chrome 浏览器**（暂不支持 Safari）。  
 
 ---
 
