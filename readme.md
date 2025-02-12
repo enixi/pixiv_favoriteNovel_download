@@ -58,17 +58,12 @@ python pixiv4.py
 
 ### **3️⃣ 输入 Pixiv COOKIE**  
 
-你可以通过 **浏览器开发者工具** 获取：  
+你可以通过浏览器 **开发者工具** 获取：
+- **Chrome / Edge:** `F12 -> 应用 -> 存储 -> Cookies`
+- **Firefox:** `F12 -> 存储 -> Cookies`
 
-🔹 **Chrome / Edge**  
-```
-F12 → 应用 (Application) → 存储 (Storage) → Cookies
-```
-
-🔹 **Firefox**  
-```
-F12 → 存储 (Storage) → Cookies
-```
+或者通过 **浏览器插件** 获取
+- **Chrome / Edge:** `安装 cookie-editor 插件 -> 点击 Export 并选择 Header String`
 
 找到 **pixiv.net 相关标头的 Cookie** 整个复制下来就可以。  
 （如果不会抓 Cookie，可在网上搜索 Pixiv 获取 Cookie 的方法。通常刷新自己主页的收藏页，类型为fetch 的）。  
@@ -77,7 +72,7 @@ F12 → 存储 (Storage) → Cookies
 程序会要求你输入 **起始页码**，例如：  
 
 ```bash
-请输入爬取的起始页码（默认为 1 ）: 1
+请输入爬取的起始页码（默认为 1 ）: 5
 ```
 
 ---
@@ -98,18 +93,42 @@ F12 → 存储 (Storage) → Cookies
 每本小说包含 **完整信息**：  
 
 ```
-标题: 小说标题  
-作者: 作者名称  
-上传时间: 2024-02-11  
-原文网址: https://www.pixiv.net/novel/show.php?id=123456789  
-标签: 科幻, 机器人, AI  
-简介: 这是一篇关于未来世界的小说...
-======================
+标题: 小说标题
+作者: 作者名称
+上传时间: 2024-02-11
+小说网址: https://www.pixiv.net/novel/show.php?id=123456789
+标签: 科幻, 机器人, AI
+简介: 
+这是一篇关于未来世界的小说...
+
+====================
+
+小说内容......
+```
+
+**系列** 小说包含的 **完整信息** 格式如下：
+
+```
+标题: 系列标题 (系列篇数，如1~12)
+作者: 作者名称
+标签: 科幻, 机器人, AI
+小说网址: https://www.pixiv.net/novel/show.php?id=123456789
+简介: 
+这是一篇关于未来世界的小说...
+
+====================
+
+作者的话：
+
+----------
+
+系列中单篇文章的作者简介
+
+----------
 
 小说正文...
 ```
 
-如果选择 **按系列下载**，所有章节会合并成 **一个完整的 TXT 文件**。  
 
 ---
 
@@ -148,4 +167,3 @@ pip install selenium webdriver-manager beautifulsoup4 requests
 ---
 
 🚀 **Enjoy!** 🚀
-
