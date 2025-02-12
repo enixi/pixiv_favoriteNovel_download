@@ -43,7 +43,7 @@ from webdriver_manager.microsoft import EdgeChromiumDriverManager
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))  # 当前文件夹
 DOWNLOAD_PATH = os.path.join(CURRENT_DIR, "download_novels")  # 小说存放目录
 min_sleep_time =1.5
-max_sleep_time = 3
+max_sleep_time = 2.5
 
 # 自动检测 WebDriver
 def get_edge_driver_path():
