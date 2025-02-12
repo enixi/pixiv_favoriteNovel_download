@@ -11,7 +11,7 @@ def install_dependencies():
     """自动安装缺少的依赖"""
     try:
         import pip
-        required_packages = ["selenium", "webdriver-manager", "beautifulsoup4", "requests"]
+        required_packages = ["selenium", "webdriver-manager", "beautifulsoup4", "fake-useragent","requests"]
         for package in required_packages:
             if not package_installed(package):
                 print(f"📦 正在安装依赖: {package}...")
@@ -34,6 +34,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
+from fake_useragent import UserAgent
 
 # 依赖安装完成后，导入库
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
@@ -41,7 +42,8 @@ from webdriver_manager.microsoft import EdgeChromiumDriverManager
 # =================== 配置区 ===================
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))  # 当前文件夹
 DOWNLOAD_PATH = os.path.join(CURRENT_DIR, "download_novels")  # 小说存放目录
-
+min_sleep_time =1.5
+max_sleep_time = 3
 
 # 自动检测 WebDriver
 def get_edge_driver_path():
@@ -87,7 +89,9 @@ class PixivNovelCrawler:
         self.session = requests.Session()
         self.mode=1
         self.base_url = "https://www.pixiv.net"
-        self.headers = {'User-Agent': 'Mozilla/5.0'}
+        self.ua = UserAgent(fallback='Mozilla/5.0')
+        self.headers = {'User-Agent': self.ua.random}
+        self.base_headers={'User-Agent': 'Mozilla/5.0'}
         self.setup_session()
 
     def setmode(self,mode):
@@ -128,23 +132,35 @@ class PixivNovelCrawler:
             if not diff_ids:
                 print(f"✅ 第 {page} 页所有小说均已下载，爬取结束！")
                 break
-
+            
             novel_ids.update(diff_ids)
             print(f"🔎 当前已发现 {len(novel_ids)} 本小说")
 
             for novel_id in diff_ids:
                 self.crawl_novel(novel_id)
-                sleep_time = random.uniform(1, 3)
+                sleep_time = random.uniform(min_sleep_time, max_sleep_time)
                 print(f"⏳ 等待 {sleep_time:.2f} 秒...")
                 time.sleep(sleep_time)
 
-            sleep_time = random.uniform(1, 3)
+            sleep_time = random.uniform(min_sleep_time, max_sleep_time)
             print(f"⏳ 等待 {sleep_time:.2f} 秒...")
             time.sleep(sleep_time)
             page += 1
 
         return novel_ids
-
+    def _generate_random_headers(self):
+        """生成包含随机 User-Agent 的 headers"""
+        try:
+            # 生成随机 User-Agent
+            user_agent = self.ua.random
+        except Exception as e:
+            print(f"生成 User-Agent 失败: {e}, 使用默认值")
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        
+        # 合并基础 headers 和随机 User-Agent
+        headers = {**self.base_headers, "User-Agent": user_agent}
+        return headers
+    
     def get_favorites_ids_from_page(self, url, requested_page):
         """解析单页收藏夹，获取小说 ID，并判断是否达到最后一页"""
         options = Options()
@@ -179,7 +195,7 @@ class PixivNovelCrawler:
             )
             for _ in range(random.randint(5, 10)):
                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(random.uniform(1.5, 3))
+                time.sleep(random.uniform(min_sleep_time, max_sleep_time))
             page_source = driver.page_source
         except Exception as e:
             print(f"❌ 页面加载或滚动过程中出错: {e}")
@@ -200,6 +216,7 @@ class PixivNovelCrawler:
 
     def crawl_novel(self, novel_id):
         """下载单篇小说"""
+        self.headers = self._generate_random_headers()
         novel_url = f"{self.base_url}/ajax/novel/{novel_id}"
         response = self.session.get(novel_url, headers=self.headers)
         if response.status_code != 200:
@@ -256,7 +273,7 @@ class PixivNovelCrawler:
             f"上传时间: {metadata['上传时间']}",
             f"原文网址: {metadata['原文网址']}",
             f"简介:\n{metadata['描述']}".rstrip(),
-            "\n" + "="*20 + "\n"
+            "\n" + "="*20 + "\n\n"
         ]
         return '\n'.join(metadata_lines)
 
@@ -264,6 +281,7 @@ class PixivNovelCrawler:
         """系列处理方法"""
         
         # 获取系列元数据
+        time.sleep(random.uniform(min_sleep_time, max_sleep_time))  # 降低请求频率
         series_info = self._get_series_info(series_id)
         if not series_info or not series_info['chapters']:
             return
@@ -274,13 +292,13 @@ class PixivNovelCrawler:
             print(f"⏳ 已下载系列 {chap_num}/{series_info['total']} 章", end="\r")
             chap['content'] = self._get_chapter_text(chap['id'])
             chap_num+=1
-            time.sleep(random.uniform(0.4, 0.6))
+            time.sleep(random.unifor(min_sleep_time, max_sleep_time))
             
         # 合并保存
         self._save_combined_series(series_info)
 
     def _get_series_info(self, series_id):
-        
+        self.headers = self._generate_random_headers()
         """获取系列基础元数据"""
         info_url = f"{self.base_url}/ajax/novel/series/{series_id}"
         try:
@@ -292,7 +310,8 @@ class PixivNovelCrawler:
             series_info = {
                 'title': data.get('title', '无标题').strip(),
                 'author': data.get('userName', '未知作者').strip(),
-                'desc': data.get('caption', '无简介').strip(),
+                'url':f"{self.base_url}/novel/series/{series_id}",
+                'desc': data.get('caption', '无简介').replace("<br />", "\n").strip(),
                 'total': data.get('total', 0),
                 'tags': data.get('tags', []),
                 'chapters': []
@@ -303,6 +322,7 @@ class PixivNovelCrawler:
         
         print(f"📚 检测到系列 {series_info['title']} ，开始处理")
         # 分页获取章节元数据
+        self.headers = self._generate_random_headers()
         limit = 30  # Pixiv 每页固定返回30条
         last_order = 0
         while last_order < series_info['total']:
@@ -321,12 +341,13 @@ class PixivNovelCrawler:
                     series_info['chapters'].append({
                         'id': item['id'],
                         'title': item['title'],
+                        'comment': item['commentHtml'].replace("<br />", "\n"),
                         'order': int(item['series']['contentOrder']),
                         'content':''
                     })
                 
                 last_order += len(content_data)
-                time.sleep(random.uniform(1, 1.5))  # 降低请求频率
+                time.sleep(random.uniform(min_sleep_time, max_sleep_time))  # 降低请求频率
                 
                 # Pixiv 实际可能返回少于limit的情况
                 if len(content_data) < limit:
@@ -341,12 +362,13 @@ class PixivNovelCrawler:
 
     def _get_chapter_text(self, novel_id):
         """获取章节正文"""
+        self.headers = self._generate_random_headers()
         url = f"{self.base_url}/ajax/novel/{novel_id}"
         try:
             response = self.session.get(url, headers=self.headers)
             return response.json().get('body', {}).get('content', '')
         except:
-            return "【内容加载失败】"
+            return "【章节内容加载失败】"
 
     def _save_combined_series(self, series_info):
         """合并保存文件"""
@@ -355,26 +377,35 @@ class PixivNovelCrawler:
         safe_title = safe_filename(series_info['title'])
         filename = f"[{safe_author}]{safe_title}.txt"
         filepath = os.path.join(DOWNLOAD_PATH, filename)
+        
+        if series_info['total']>1:
+            series_title=f"标题：{series_info['title']} (1~{series_info['total']})"
+
+        else:
+            series_title=f"标题：{series_info['title']}"
 
         # 构建文件头
         header = [
-            f"标题：{series_info['title']}",
+            series_title,
             f"作者：{series_info['author']}",
             f"标签：{', '.join(series_info['tags'])}",
-            f"章节数：{series_info['total']}",
+            f"原文网址: {series_info['url']}",
             f"简介：\n{series_info['desc']}".rstrip(),
-            "\n" + "="*20 + "\n\n"
         ]
-        
 
         # 按章节顺序写入
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write('\n'.join(header))
             for chap in series_info['chapters']:
+                if chap['comment']!='':
+                    comment=f"作者的话：\n\n" + "-"*10 + f"\n\n{chap['comment']}".rstrip() + f'\n\n'+"-"*10+f'\n'
+                else:
+                    comment=''
                 chapter_content = [
+                    "\n\n" + "="*20 + "\n",
                     f"{chap['title']}".rstrip()+f'\n',
-                    chap['content'],
-                    "\n" + "="*20 + "\n\n"
+                    comment,
+                    chap['content'].rstrip()+f'\n'
                 ]
                 f.write('\n'.join(chapter_content))
 
