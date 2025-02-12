@@ -32,7 +32,7 @@ pip install -r requirements.txt
 如果没有 `requirements.txt`，请执行：  
 
 ```bash
-pip install selenium webdriver-manager beautifulsoup4 requests
+pip install selenium webdriver-manager beautifulsoup4 fake-useragent requests
 ```
 
 ---
