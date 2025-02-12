@@ -41,25 +41,7 @@ from webdriver_manager.microsoft import EdgeChromiumDriverManager
 # =================== 配置区 ===================
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))  # 当前文件夹
 DOWNLOAD_PATH = os.path.join(CURRENT_DIR, "download_novels")  # 小说存放目录
-os.makedirs(DOWNLOAD_PATH, exist_ok=True)
 
-# 让用户输入 COOKIE
-COOKIE = input("请粘贴你的 Pixiv COOKIE: ").strip()
-
-# 自动提取 USER_ID
-match = re.search(r"user_id=(\d+)", COOKIE)
-if match:
-    USER_ID = match.group(1)
-    print(f"🔍 从 COOKIE 中提取到 USER_ID: {USER_ID}")
-else:
-    print("❌ 无法从 COOKIE 中获取 USER_ID，请检查你的 COOKIE。")
-    sys.exit(1)
-
-# 让用户输入起始页码
-start_page = input("请输入起始页码（如 1 或 51 继续爬取）: ").strip()
-start_page = int(start_page) if start_page.isdigit() else 1
-
-BASE_URL = f"https://www.pixiv.net/users/{USER_ID}/bookmarks/novels?p={{page}}"
 
 # 自动检测 WebDriver
 def get_edge_driver_path():
@@ -100,22 +82,27 @@ def safe_filename(name):
 # =============================================
 
 class PixivNovelCrawler:
-    def __init__(self):
+    def __init__(self,COOKIE):
+        self.cookie=COOKIE
         self.session = requests.Session()
+        self.mode=1
         self.base_url = "https://www.pixiv.net"
         self.headers = {'User-Agent': 'Mozilla/5.0'}
         self.setup_session()
 
+    def setmode(self,mode):
+        self.mode=mode
+    
     def setup_session(self):
         """设置 requests 会话的 Cookie"""
-        for cookie_pair in COOKIE.split(';'):
+        for cookie_pair in self.cookie.split(';'):
             cookie_pair = cookie_pair.strip()
             if not cookie_pair or '=' not in cookie_pair:
                 continue
             name, value = cookie_pair.split('=', 1)
             self.session.cookies.set(name, value)
 
-    def get_all_favorites_ids(self, start_page=1):
+    def get_all_favorites_ids(self, BASE_URL,start_page=1):
         """
         从指定页码开始爬取收藏夹中的小说 ID，并下载小说。
         如果返回空集合，则认为已到达最后一页，终止翻页下载。
@@ -147,11 +134,11 @@ class PixivNovelCrawler:
 
             for novel_id in diff_ids:
                 self.crawl_novel(novel_id)
-                sleep_time = random.uniform(1, 5)
+                sleep_time = random.uniform(1, 3)
                 print(f"⏳ 等待 {sleep_time:.2f} 秒...")
                 time.sleep(sleep_time)
 
-            sleep_time = random.uniform(2, 5)
+            sleep_time = random.uniform(1, 3)
             print(f"⏳ 等待 {sleep_time:.2f} 秒...")
             time.sleep(sleep_time)
             page += 1
@@ -164,18 +151,13 @@ class PixivNovelCrawler:
         options.add_argument("--headless")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920x1080")
-        options.add_argument("--ignore-certificate-errors")
-        options.add_argument("--disable-extensions")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument("--disable-features=msAccountSSO,msWelcomePage")
 
         service = Service(EDGE_DRIVER_PATH)
         driver = webdriver.Edge(service=service, options=options)
         try:
             driver.get("https://www.pixiv.net")
-            time.sleep(3)
-            for cookie_pair in COOKIE.split(';'):
+            time.sleep(2)
+            for cookie_pair in self.cookie.split(';'):
                 cookie_pair = cookie_pair.strip()
                 if not cookie_pair or '=' not in cookie_pair:
                     continue
@@ -197,7 +179,7 @@ class PixivNovelCrawler:
             )
             for _ in range(random.randint(5, 10)):
                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(random.uniform(1, 3))
+                time.sleep(random.uniform(1.5, 3))
             page_source = driver.page_source
         except Exception as e:
             print(f"❌ 页面加载或滚动过程中出错: {e}")
@@ -218,8 +200,8 @@ class PixivNovelCrawler:
 
     def crawl_novel(self, novel_id):
         """下载单篇小说"""
-        novel_url_ajax = f"{self.base_url}/ajax/novel/{novel_id}"
-        response = self.session.get(novel_url_ajax, headers=self.headers)
+        novel_url = f"{self.base_url}/ajax/novel/{novel_id}"
+        response = self.session.get(novel_url, headers=self.headers)
         if response.status_code != 200:
             print(f"⚠️ 获取小说 {novel_id} 失败")
             return
@@ -228,10 +210,17 @@ class PixivNovelCrawler:
         if not novel_data:
             print(f"⚠️ 小说 {novel_id} 数据解析失败")
             return
-
-        title = novel_data.get('title', '无标题')
-        # 构造小说展示页面 URL
-        novel_url_show = f"{self.base_url}/novel/show.php?id={novel_id}"
+        
+        # 检查文章是否属于某个系列
+        if self.mode==2:
+            series_nav_data = novel_data.get('seriesNavData') or {}
+            series_id = series_nav_data.get('seriesId')
+        else: 
+            series_id=''
+        
+        if series_id:
+            self.crawl_series(series_id)
+            return  # 不继续处理单篇
         
         # 提取元数据
         metadata = {
@@ -240,7 +229,7 @@ class PixivNovelCrawler:
             "上传时间": novel_data.get('uploadDate', '未知日期'),
             "标签": [tag.get('tag', '') for tag in novel_data.get('tags', {}).get('tags', [])],
             "描述": novel_data.get('description', '无描述').replace("<br />", "\n").strip(),
-            "小说网址": novel_url_show
+            "原文网址": f"{self.base_url}/novel/show.php?id={novel_id}"
         }
         content = novel_data.get('content', '')
 
@@ -254,24 +243,172 @@ class PixivNovelCrawler:
         with open(file_name, 'w', encoding='utf-8') as f:
             f.write(full_content)
 
-        print(f"✅ 小说 {title} 下载完成！")
+        print(f"✅ 小说 {safe_title} 下载完成！")
+
+
 
     def _format_metadata(self, metadata):
-        """格式化元数据为文本块，将小说网址插入在上传时间之后"""
+        """格式化元数据为文本块"""
         metadata_lines = [
             f"标题: {metadata['标题']}",
             f"作者: {metadata['作者']}",
             f"标签: {', '.join(metadata['标签'])}",
             f"上传时间: {metadata['上传时间']}",
-            f"小说网址: {metadata['小说网址']}",
-            f"简介: {metadata['描述']}",
-            "\n----------\n\n"
+            f"原文网址: {metadata['原文网址']}",
+            f"简介:\n{metadata['描述']}".rstrip(),
+            "\n" + "="*20 + "\n"
         ]
         return '\n'.join(metadata_lines)
 
+    def crawl_series(self, series_id):
+        """系列处理方法"""
+        
+        # 获取系列元数据
+        series_info = self._get_series_info(series_id)
+        if not series_info or not series_info['chapters']:
+            return
+
+        # 收集章节内容
+        chap_num=1
+        for chap in series_info['chapters']:
+            print(f"⏳ 已下载系列 {chap_num}/{series_info['total']} 章", end="\r")
+            chap['content'] = self._get_chapter_text(chap['id'])
+            chap_num+=1
+            time.sleep(random.uniform(0.4, 0.6))
+            
+        # 合并保存
+        self._save_combined_series(series_info)
+
+    def _get_series_info(self, series_id):
+        
+        """获取系列基础元数据"""
+        info_url = f"{self.base_url}/ajax/novel/series/{series_id}"
+        try:
+            response = self.session.get(info_url, headers=self.headers)
+            if response.status_code != 200:
+                return None
+            data = response.json().get('body', {})
+            
+            series_info = {
+                'title': data.get('title', '无标题').strip(),
+                'author': data.get('userName', '未知作者').strip(),
+                'desc': data.get('caption', '无简介').strip(),
+                'total': data.get('total', 0),
+                'tags': data.get('tags', []),
+                'chapters': []
+            }
+        except Exception as e:
+            print(f"⚠️ 获取系列信息失败: {e}")
+            return None
+        
+        print(f"📚 检测到系列 {series_info['title']} ，开始处理")
+        # 分页获取章节元数据
+        limit = 30  # Pixiv 每页固定返回30条
+        last_order = 0
+        while last_order < series_info['total']:
+            content_url = f"{self.base_url}/ajax/novel/series_content/{series_id}"
+            params = {
+                'limit': limit,
+                'last_order': last_order,
+                'order_by': 'asc'
+            }
+            try:
+                content_res = self.session.get(content_url, params=params, headers=self.headers)
+                content_data = content_res.json().get('body', {}).get('page', {}).get('seriesContents', [])
+                
+                # 解析章节数据
+                for item in content_data:
+                    series_info['chapters'].append({
+                        'id': item['id'],
+                        'title': item['title'],
+                        'order': int(item['series']['contentOrder']),
+                        'content':''
+                    })
+                
+                last_order += len(content_data)
+                time.sleep(random.uniform(1, 1.5))  # 降低请求频率
+                
+                # Pixiv 实际可能返回少于limit的情况
+                if len(content_data) < limit:
+                    break
+                    
+            except Exception as e:
+                print(f"⚠️ 获取章节列表失败: {e}")
+                break    
+        # 按order排序章节
+        series_info['chapters'].sort(key=lambda x: x['order'])
+        return series_info            
+
+    def _get_chapter_text(self, novel_id):
+        """获取章节正文"""
+        url = f"{self.base_url}/ajax/novel/{novel_id}"
+        try:
+            response = self.session.get(url, headers=self.headers)
+            return response.json().get('body', {}).get('content', '')
+        except:
+            return "【内容加载失败】"
+
+    def _save_combined_series(self, series_info):
+        """合并保存文件"""
+        # 生成文件名
+        safe_author = safe_filename(series_info['author'])
+        safe_title = safe_filename(series_info['title'])
+        filename = f"[{safe_author}]{safe_title}.txt"
+        filepath = os.path.join(DOWNLOAD_PATH, filename)
+
+        # 构建文件头
+        header = [
+            f"标题：{series_info['title']}",
+            f"作者：{series_info['author']}",
+            f"标签：{', '.join(series_info['tags'])}",
+            f"章节数：{series_info['total']}",
+            f"简介：\n{series_info['desc']}".rstrip(),
+            "\n" + "="*20 + "\n\n"
+        ]
+        
+
+        # 按章节顺序写入
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(header))
+            for chap in series_info['chapters']:
+                chapter_content = [
+                    f"{chap['title']}".rstrip()+f'\n',
+                    chap['content'],
+                    "\n" + "="*20 + "\n\n"
+                ]
+                f.write('\n'.join(chapter_content))
+
+        print(f"✅ 已保存系列 {series_info['title']} ，共 {series_info['total']} 章")
+
+
 def main():
-    crawler = PixivNovelCrawler()
-    crawler.get_all_favorites_ids(start_page=start_page)
+    os.makedirs(DOWNLOAD_PATH, exist_ok=True)
+    # 选择模式
+    print(f"\n请选择下载模式 : \n模式 1: 按单章下载\n模式 2: 按系列下载")
+    mode=int(input("请输入选择的下载模式（默认为 1 ） ").strip())
+    
+    # 让用户输入 COOKIE
+    COOKIE = input("请粘贴你的 Pixiv COOKIE: ").strip()
+
+    # 自动提取 USER_ID
+    match = re.search(r"user_id=(\d+)", COOKIE)
+    if match:
+        USER_ID = match.group(1)
+        print(f"🔍 从 COOKIE 中提取到 USER_ID: {USER_ID}")
+    else:
+        print("❌ 无法从 COOKIE 中获取 USER_ID，请检查你的 COOKIE。")
+        sys.exit(1)
+    
+
+    # 让用户输入起始页码
+    start_page = input("请输入爬取的起始页码（默认为 1 ）: ").strip()
+    start_page = int(start_page) if start_page.isdigit() else 1
+
+    BASE_URL = f"https://www.pixiv.net/users/{USER_ID}/bookmarks/novels?p={{page}}"
+    crawler = PixivNovelCrawler(COOKIE)
+    crawler.setmode(mode)
+    crawler.get_all_favorites_ids(BASE_URL,start_page=start_page)
 
 if __name__ == "__main__":
     main()
+
