@@ -292,7 +292,7 @@ class PixivNovelCrawler:
             print(f"⏳ 已下载系列 {chap_num}/{series_info['total']} 章", end="\r")
             chap['content'] = self._get_chapter_text(chap['id'])
             chap_num+=1
-            time.sleep(random.unifor(min_sleep_time, max_sleep_time))
+            time.sleep(random.uniform(min_sleep_time, max_sleep_time))
             
         # 合并保存
         self._save_combined_series(series_info)
