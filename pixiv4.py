@@ -5,6 +5,7 @@ import requests
 import re
 import sys
 import shutil
+import tempfile
 
 # =================== 安装依赖 ===================
 def install_dependencies():
@@ -93,6 +94,8 @@ class PixivNovelCrawler:
         self.headers = {'User-Agent': self.ua.random}
         self.base_headers={'User-Agent': 'Mozilla/5.0'}
         self.setup_session()
+        # 记录已下载的系列，避免重复下载
+        self.downloaded_series = set()
 
     def setmode(self,mode):
         self.mode=mode
@@ -161,18 +164,28 @@ class PixivNovelCrawler:
         headers = {**self.base_headers, "User-Agent": user_agent}
         return headers
     
+  
+
     def get_favorites_ids_from_page(self, url, requested_page):
         """解析单页收藏夹，获取小说 ID，并判断是否达到最后一页"""
         options = Options()
         options.add_argument("--headless")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920x1080")
+        options.add_argument("--log-level=3")  # 0: 默认, 1: 警告, 2: 信息, 3: 错误
+
+
+        # 生成唯一的临时 Edge 用户目录，避免多个 WebDriver 占用
+        temp_user_data_dir = tempfile.mkdtemp()
+        options.add_argument(f"--user-data-dir={temp_user_data_dir}")
 
         service = Service(EDGE_DRIVER_PATH)
         driver = webdriver.Edge(service=service, options=options)
+
         try:
             driver.get("https://www.pixiv.net")
             time.sleep(2)
+            
             for cookie_pair in self.cookie.split(';'):
                 cookie_pair = cookie_pair.strip()
                 if not cookie_pair or '=' not in cookie_pair:
@@ -181,27 +194,24 @@ class PixivNovelCrawler:
                 driver.add_cookie({"name": name, "value": value, "domain": ".pixiv.net"})
 
             driver.get(url)
-            # 判断是否自动跳转回最后一页
-            current_url = driver.current_url
-            match_current = re.search(r'p=(\d+)', current_url)
-            if match_current:
-                actual_page = int(match_current.group(1))
-                if actual_page < requested_page:
-                    print(f"已到达最后一页：请求页 {requested_page}，当前页 {actual_page}")
-                    driver.quit()
-                    return set()
             WebDriverWait(driver, 15).until(
                 EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a[href*='/novel/show.php?id=']"))
             )
+
             for _ in range(random.randint(5, 10)):
                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(random.uniform(min_sleep_time, max_sleep_time))
+                time.sleep(random.uniform(1.5, 3))
+
             page_source = driver.page_source
+
         except Exception as e:
             print(f"❌ 页面加载或滚动过程中出错: {e}")
-            driver.quit()
             return set()
-        driver.quit()
+        
+        finally:
+            driver.quit()  # 关闭 WebDriver，避免进程残留
+            shutil.rmtree(temp_user_data_dir, ignore_errors=True)  # 删除临时 Edge 用户目录
+
         soup = BeautifulSoup(page_source, 'html.parser')
 
         ids = set()
@@ -210,6 +220,7 @@ class PixivNovelCrawler:
                 match = re.search(r'id=(\d+)', a['href'])
                 if match:
                     ids.add(match.group(1))
+
         page_param = url.split('=')[-1]
         print(f"📖 第 {page_param} 页找到 {len(ids)} 本小说")
         return ids
@@ -279,6 +290,12 @@ class PixivNovelCrawler:
 
     def crawl_series(self, series_id):
         """系列处理方法"""
+        # 如果系列已下载，则跳过
+        if series_id in self.downloaded_series:
+            print(f"✅ 系列 {series_id} 已下载，跳过...")
+            return  # 避免重复下载同一系列
+        
+        self.downloaded_series.add(series_id)  # 标记已下载
         
         # 获取系列元数据
         time.sleep(random.uniform(min_sleep_time, max_sleep_time))  # 降低请求频率
