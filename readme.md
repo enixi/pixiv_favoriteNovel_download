@@ -1,14 +1,14 @@
 # 📖 Pixiv Favorite Novel Download  
 
 这是一个用于 **批量下载 Pixiv 自己收藏夹里的小说** 的 Python 爬虫脚本。  
-⚠ **注意**：请 **确保开启【全局】 VPN**，并 **安装 Microsoft Edge/Chrome 浏览器**（暂不支持 Safari）。  
+⚠ **注意**：请 **确保开启【全局】 VPN**，并 **安装 Chrome / Edge 浏览器**（暂不支持 Safari）。  
 
 ---
 
 ## ✨ 功能特点  
 
 - ✅ **自动爬取** Pixiv 收藏夹中的小说  
-- ✅ **支持 Edge 浏览器**（自动适配，**无需手动配置 WebDriver**）  
+- ✅ **支持 Chrome / Edge 浏览器**（自动适配，**无需手动配置 WebDriver**）  
 - ✅ **自动解析小说信息**（标题、作者、上传时间、标签等）  
 - ✅ **支持按** **单章 / 系列** **下载**  
 - ✅ **仅支持 Windows**（Linux / Mac 用户需手动安装 Edge WebDriver）  
@@ -152,7 +152,7 @@ python -m webdriver_manager
 如果运行时遇到 **ModuleNotFoundError**，请手动安装：  
 
 ```bash
-pip install selenium webdriver-manager beautifulsoup4 requests
+pip install selenium webdriver-manager beautifulsoup4 fake-useragent requests
 ```
 
 ### **3️⃣ Pixiv COOKIE 过期**  
