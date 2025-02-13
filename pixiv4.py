@@ -1,76 +1,123 @@
 import os
+import subprocess
 import time
 import random
-import requests
 import re
 import sys
+import json
 import shutil
 import tempfile
+import importlib.util
+
+# =================== 配置区 ===================
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))  # 当前文件夹
+DOWNLOAD_PATH = os.path.join(CURRENT_DIR, "download_novels")  # 小说存放目录
+CONFIG_PATH = os.path.join(CURRENT_DIR, "config.json") # 配置文件地址
+
+DRIVER_PATH = '' # WebDriver 路径
+browser_type = 2   # 1 为 edge , 2 为 chrome 
+min_sleep_time , max_sleep_time = 1.5,2.5
+
+
+# 依赖库（模块名: PyPI包名）
+required_modules = {
+    'selenium': 'selenium',
+    'webdriver_manager': 'webdriver-manager',
+    'bs4': 'beautifulsoup4',
+    'fake_useragent': 'fake-useragent',
+    'requests': 'requests'
+}
 
 # =================== 安装依赖 ===================
 def install_dependencies():
     """自动安装缺少的依赖"""
     try:
-        import pip
-        required_packages = ["selenium", "webdriver-manager", "beautifulsoup4", "fake-useragent","requests"]
-        for package in required_packages:
-            if not package_installed(package):
-                print(f"📦 正在安装依赖: {package}...")
-                pip.main(['install', package])
+        for module_name, package_name in required_modules.items():
+            if not package_installed(module_name):
+                print(f"📦 正在安装依赖: {package_name}...")
+                subprocess.check_call([sys.executable, '-m', 'pip', 'install', package_name])
     except Exception as e:
         print(f"❌ 依赖安装失败: {e}")
         sys.exit(1)
 
 def package_installed(package_name):
-    """检查 Python 包是否已安装"""
-    import importlib.util
+    """检查 Python 包是否已安装（按模块名检查）"""
     return importlib.util.find_spec(package_name) is not None
 
 install_dependencies()  # 运行安装
 
-from selenium import webdriver
-from selenium.webdriver.edge.service import Service
-from selenium.webdriver.edge.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+# 依赖安装完成后，导入库
+import requests
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
-# 依赖安装完成后，导入库
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
+from selenium.webdriver.edge.service import Service
+from selenium.webdriver.edge.options import Options
 
-# =================== 配置区 ===================
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))  # 当前文件夹
-DOWNLOAD_PATH = os.path.join(CURRENT_DIR, "download_novels")  # 小说存放目录
-min_sleep_time =1.5
-max_sleep_time = 2.5
+from webdriver_manager.chrome import ChromeDriverManager  
+from selenium.webdriver.chrome.service import Service as ChromeService  
+from selenium.webdriver.chrome.options import Options as ChromeOptions
 
-# 自动检测 WebDriver
-def get_edge_driver_path():
-    """尝试获取 Edge WebDriver 路径"""
+def load_config():
+    """从 config.json 读取保存的 WebDriver 路径和浏览器类型"""
+    try:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, "r") as f:
+                config = json.load(f)
+                saved_path = config.get("driver_path", "")
+                saved_browser = config.get("browser_type", browser_type)
+                if os.path.exists(saved_path):
+                    return saved_path, saved_browser
+    except json.JSONDecodeError:
+        print("⚠️ 配置文件格式错误，将重新生成")
+    except Exception as e:
+        print(f"⚠️ 读取配置文件失败: {e}")
+    return None
+
+def save_config(driver_path, browser_type):
+    """将 WebDriver 路径和浏览器类型写入 config.json"""
+    try:
+        config = {
+            "driver_path": driver_path,
+            "browser_type": browser_type
+        }
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(config, f, indent=2)
+        print(f"📁 配置已保存到: {CONFIG_PATH}")
+    except Exception as e:
+        print(f"⚠️ 保存配置文件失败: {e}")
+
+def get_driver_path(saved_path):
+    """检测本地可能的 WebDriver 路径"""
     possible_paths = [
-        shutil.which("msedgedriver"),  # 在系统环境变量中查找
-        os.path.join(CURRENT_DIR, "msedgedriver.exe"),  # 当前目录
+        saved_path,  # 优先级1：配置文件中的路径
+        shutil.which("chromedriver") if browser_type == 2 else shutil.which("msedgedriver"),  # 优先级2：环境变量
+        os.path.join(CURRENT_DIR, "chromedriver.exe" if browser_type == 2 else "msedgedriver.exe"),  # 优先级3：当前目录
     ]
     for path in possible_paths:
         if path and os.path.exists(path):
             return path
     return None
 
-EDGE_DRIVER_PATH = get_edge_driver_path()
-
-if not EDGE_DRIVER_PATH:
+def check_DRIVER_PATH(DRIVER_PATH):
     try:
-        # 自动下载安装 WebDriver
-        EDGE_DRIVER_PATH = EdgeChromiumDriverManager().install()
-        print(f"✅ WebDriver 已安装: {EDGE_DRIVER_PATH}")
+        if browser_type == 2 and not DRIVER_PATH:
+            DRIVER_PATH = ChromeDriverManager().install()
+        elif browser_type == 1 and not DRIVER_PATH:
+            DRIVER_PATH = EdgeChromiumDriverManager().install()
+        print(f"✅ WebDriver 已安装: {DRIVER_PATH}")
+        return DRIVER_PATH
     except Exception as e:
-        print(f"❌ 无法安装 WebDriver: {e}")
-        sys.exit(1)
-else:
-    print(f"✅ 使用本地 WebDriver: {EDGE_DRIVER_PATH}")
-
+            print(f"❌ 无法安装 WebDriver: {e}")
+            sys.exit(1)
+    
 # 辅助函数：清理文件名中的非法字符以及多余空白
 def safe_filename(name):
     """
@@ -88,7 +135,8 @@ class PixivNovelCrawler:
     def __init__(self,COOKIE):
         self.cookie=COOKIE
         self.session = requests.Session()
-        self.mode=1
+        self.mode=1 # 1 为 单章 , 2 为 系列
+        self.browser_type = 1 # 1 为 edge , 2 为 chrome 
         self.base_url = "https://www.pixiv.net"
         self.ua = UserAgent(fallback='Mozilla/5.0')
         self.headers = {'User-Agent': self.ua.random}
@@ -99,6 +147,9 @@ class PixivNovelCrawler:
 
     def setmode(self,mode):
         self.mode=mode
+    
+    def set_browser_type(self,browser_type):
+        self.browser_type=browser_type
     
     def setup_session(self):
         """设置 requests 会话的 Cookie"""
@@ -164,25 +215,33 @@ class PixivNovelCrawler:
         headers = {**self.base_headers, "User-Agent": user_agent}
         return headers
     
-  
 
     def get_favorites_ids_from_page(self, url, requested_page):
         """解析单页收藏夹，获取小说 ID，并判断是否达到最后一页"""
-        options = Options()
+        if self.browser_type == 2:
+            options = ChromeOptions()
+            driver_path = DRIVER_PATH
+            service = ChromeService(driver_path)
+        else:
+            options = Options()
+            driver_path = DRIVER_PATH
+            service = Service(driver_path)
+        
         options.add_argument("--headless")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920x1080")
         options.add_argument("--log-level=3")  # 0: 默认, 1: 警告, 2: 信息, 3: 错误
 
 
-        # 生成唯一的临时 Edge 用户目录，避免多个 WebDriver 占用
+        # 生成唯一的临时用户目录，避免多个 WebDriver 占用
         temp_user_data_dir = tempfile.mkdtemp()
         options.add_argument(f"--user-data-dir={temp_user_data_dir}")
 
-        service = Service(EDGE_DRIVER_PATH)
-        driver = webdriver.Edge(service=service, options=options)
+        service = Service(DRIVER_PATH)
 
         try:
+            driver = webdriver.Chrome(service=service, options=options) if self.browser_type == "chrome" \
+                else webdriver.Edge(service=service, options=options)
             driver.get("https://www.pixiv.net")
             time.sleep(2)
             
@@ -198,7 +257,7 @@ class PixivNovelCrawler:
                 EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a[href*='/novel/show.php?id=']"))
             )
 
-            for _ in range(random.randint(5, 10)):
+            for _ in range(random.randint(4, 5)):
                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(random.uniform(1.5, 3))
 
@@ -210,7 +269,7 @@ class PixivNovelCrawler:
         
         finally:
             driver.quit()  # 关闭 WebDriver，避免进程残留
-            shutil.rmtree(temp_user_data_dir, ignore_errors=True)  # 删除临时 Edge 用户目录
+            shutil.rmtree(temp_user_data_dir, ignore_errors=True)  # 删除临时用户目录
 
         soup = BeautifulSoup(page_source, 'html.parser')
 
@@ -430,10 +489,27 @@ class PixivNovelCrawler:
 
 
 def main():
+    global DOWNLOAD_PATH,CONFIG_PATH,DRIVER_PATH,browser_type
     os.makedirs(DOWNLOAD_PATH, exist_ok=True)
+    
+    # 获取 web_driver 
+    if os.path.exists(CONFIG_PATH):
+        saved_path,browser_type=load_config()
+    else:
+        print(f"\n检测到此次为初次运行，请选择拥有的浏览器 : \n类型 1: edge\n类型 2: chrome")
+        browser_type=input("请输入浏览器类型（默认为 1 ） ").strip()
+        browser_type = int(browser_type) if browser_type.isdigit() else 1
+        saved_path=''
+    
+    DRIVER_PATH = get_driver_path(saved_path)
+    DRIVER_PATH = check_DRIVER_PATH(DRIVER_PATH)
+    save_config(DRIVER_PATH, browser_type)
+        
     # 选择模式
     print(f"\n请选择下载模式 : \n模式 1: 按单章下载\n模式 2: 按系列下载")
-    mode=int(input("请输入选择的下载模式（默认为 1 ） ").strip())
+    mode=input("请输入选择的下载模式（默认为 1 ） ").strip()
+    mode = int(mode) if mode.isdigit() else 1
+
     
     # 让用户输入 COOKIE
     COOKIE = input("请粘贴你的 Pixiv COOKIE: ").strip()
@@ -455,7 +531,8 @@ def main():
     BASE_URL = f"https://www.pixiv.net/users/{USER_ID}/bookmarks/novels?p={{page}}"
     crawler = PixivNovelCrawler(COOKIE)
     crawler.setmode(mode)
-    crawler.get_all_favorites_ids(BASE_URL,start_page=start_page)
+    crawler.set_browser_type(browser_type)
+    crawler.get_all_favorites_ids(BASE_URL,start_page)
 
 if __name__ == "__main__":
     main()

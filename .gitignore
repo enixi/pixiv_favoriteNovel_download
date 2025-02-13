@@ -17,6 +17,7 @@ env/
 # 🛑 日志文件
 logs/
 *.log
+config.json
 
 # 🛑 忽略 Pixiv 小说下载的文件
 download_novels/
