@@ -17,7 +17,9 @@ CONFIG_PATH = os.path.join(CURRENT_DIR, "config.json") # 配置文件地址
 
 DRIVER_PATH = '' # WebDriver 路径
 browser_type = 2   # 1 为 edge , 2 为 chrome 
-min_sleep_time , max_sleep_time = 1.5,2.5
+
+# 为应对pixiv反爬措施，每章下载前的等待时间区间
+min_sleep_time , max_sleep_time = 1.5,2.5  
 
 
 # 依赖库（模块名: PyPI包名）
@@ -76,7 +78,7 @@ def load_config():
                 if os.path.exists(saved_path):
                     return saved_path, saved_browser
     except json.JSONDecodeError:
-        print("⚠️ 配置文件格式错误，将重新生成")
+        print(f"⚠️ 配置文件格式错误，将重新生成")
     except Exception as e:
         print(f"⚠️ 读取配置文件失败: {e}")
     return None
@@ -520,7 +522,7 @@ def main():
         USER_ID = match.group(1)
         print(f"🔍 从 COOKIE 中提取到 USER_ID: {USER_ID}")
     else:
-        print("❌ 无法从 COOKIE 中获取 USER_ID，请检查你的 COOKIE。")
+        print(f"❌ 无法从 COOKIE 中获取 USER_ID，请检查你的 COOKIE。")
         sys.exit(1)
     
 

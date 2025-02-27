@@ -29,7 +29,7 @@
 pip install -r requirements.txt
 ```
 
-如果没有 `requirements.txt`，请执行：  
+或者执行：  
 
 ```bash
 pip install selenium webdriver-manager beautifulsoup4 fake-useragent requests
@@ -63,14 +63,16 @@ python pixiv4.py
 ### **3️⃣ 输入 Pixiv COOKIE**  
 
 你可以通过浏览器 **开发者工具** 获取：
-- **Chrome / Edge:** `F12 -> 应用 -> 存储 -> Cookies`
-- **Firefox:** `F12 -> 存储 -> Cookies`
+- **Chrome / Edge:** `F12 -> 网络 -> (筛选条件:)文档 -> (名称:)novel -> Cookies`
+
+找到 **pixiv.net 相应标头的 Cookie** 整个复制下来就可以。  
+（如果不会抓 Cookie，可在网上搜索 Pixiv 获取 Cookie 的方法。通常刷新自己主页的收藏页，类型为fetch 的）。  
+
+示例: 
+![示例图](https://github.com/user-attachments/assets/0b951b9d-90be-454f-a422-d9f5919c809c)
 
 或者通过 **浏览器插件** 获取
-- **Chrome / Edge:** `安装 cookie-editor 插件 -> 点击 Export 并选择 Header String`
-
-找到 **pixiv.net 相关标头的 Cookie** 整个复制下来就可以。  
-（如果不会抓 Cookie，可在网上搜索 Pixiv 获取 Cookie 的方法。通常刷新自己主页的收藏页，类型为fetch 的）。  
+- **Chrome / Edge:** `安装 cookie-editor 插件 -> 点击 Export 并选择 Header String -> 复制粘贴获取的 Cookie`
 
 ### **4️⃣ 输入起始页**  
 程序会要求你输入 **起始页码**，例如：  
